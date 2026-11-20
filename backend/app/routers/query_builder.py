@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.schemas import ActionResult, EntryPayload, PageResult
 from app.services.query_builder import QueryBuilderService
+from app.services.parameter_binding import collect_list_filters
 
 router = APIRouter(prefix="/api/query_builder", tags=["OLAP查询"])
 
@@ -34,7 +35,9 @@ def list_entries(
     """按模板编号与状态过滤OLAP查询列表；没有数据时返回空页，不报错。"""
     if size > 200:
         raise HTTPException(status_code=400, detail="每页最多 200 条，请缩小分页范围")
-    extra = {k: v for k, v in request.query_params.items() if k not in ("keyword", "status", "page", "size") and v.strip()}
+    extra = collect_list_filters(
+        request.query_params, ("keyword", "status", "page", "size")
+    )
     items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size, extra=extra)
     return PageResult(items=items, total=total, page=page, size=size)
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services.parameter_binding import filter_rows
 from app.store import store
 
 MODULE = "query_builder"
@@ -22,14 +23,13 @@ class QueryBuilderService:
         size: int = 20,
         extra: dict[str, str] | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
-        rows = store.rows(MODULE)
-        if keyword:
-            rows = [row for row in rows if keyword in str(row.get("模板编号", ""))]
-        if status:
-            rows = [row for row in rows if row.get("status") == status]
-        if extra:
-            for field, val in extra.items():
-                rows = [row for row in rows if val in str(row.get(field, ""))]
+        rows = filter_rows(
+            store.rows(MODULE),
+            keyword=keyword,
+            keyword_field="模板编号",
+            status=status,
+            extra=extra,
+        )
         total = len(rows)
         start = max(page - 1, 0) * size
         return rows[start:start + size], total

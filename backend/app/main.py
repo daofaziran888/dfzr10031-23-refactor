@@ -5,11 +5,13 @@
 """
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.routers import ROUTERS
+from app.services.parameter_binding import ParameterContractError
 from app.store import store
 
 app = FastAPI(title="数据分析实验与数据应用服务平台", version="1.0.0")
@@ -24,6 +26,12 @@ app.add_middleware(
 
 for module in ROUTERS:
     app.include_router(module.router)
+
+
+@app.exception_handler(ParameterContractError)
+def parameter_contract_error(request: Request, exc: ParameterContractError) -> JSONResponse:
+    """参数契约错误统一返回 ``{ok, code, message}``，错误码保持稳定。"""
+    return JSONResponse(status_code=exc.status_code, content=exc.as_dict())
 
 
 @app.get("/api/health")

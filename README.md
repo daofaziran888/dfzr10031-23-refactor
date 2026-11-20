@@ -57,6 +57,7 @@ npm run dev
 | 数据看板 | `dashboard` | 看板配置 | 看板编号、看板名称、包含图表 |
 | 图表配置 | `chart` | 图表 | 图表编号、图表名称、图表类型 |
 | 数据API发布 | `data_service` | 数据服务 | 服务编号、服务名称、输出数据集 |
+| 取数参数绑定 | `fetch_service` | 取数模板 / 报表 | 模板编号、参数定义、数据范围、空值含义 |
 | 智能告警 | `alert` | 告警规则 | 规则编号、告警名称、监控指标 |
 | 分析用户组 | `user_group` | 用户组 | 组编号、组名称、组描述 |
 | 数据快照 | `snapshot` | 快照记录 | 快照编号、数据集名称、快照时间 |
@@ -67,6 +68,39 @@ npm run dev
 | 数据集市 | `data_mart` | 集市表 | 表编号、表名称、主题域 |
 | 数据导出 | `export` | 导出任务 | 任务编号、导出对象、导出格式 |
 | 数据审计 | `audit` | 审计记录 | 记录编号、操作类型、操作人 |
+
+## 取数参数绑定契约
+
+OLAP 查询列表与数据 API 列表原来各写了一遍“把查询串转成过滤条件”。现在这段规则
+收敛在 `backend/app/services/parameter_binding.py`，两处列表都改用它，历史行为不变。
+
+- **列表语义不变**：`keyword` / `status` 为空串或未传时不参与过滤（纯空白仍按历史参与），
+  扩展字段 `strip()` 后为空则不参与；字符串 `"0"` 仍然是有效过滤值。
+- **参数绑定清单**：`POST /api/fetch/parameter-bindings` 为每个条件保留输入原文、
+  业务类型（`string` / `number` / `boolean`）和存在形态（`missing` / `empty_string` /
+  `zero` / `value`）。未填写、空字符串、数值零是三种不同的输入，请求指纹也不同。
+- **空值含义由模板记录**：参数定义里用 `empty_means: all | empty` 写明空串是
+  “不筛选”还是“字段为空”，结果里会带上数据范围（`scope`）。
+- **范围冲突**：同一变量被绑到不同数据范围时返回 `PARAM_SCOPE_CONFLICT`，不会当成
+  同一次请求复用；请求指纹包含范围。
+- **覆盖计算**：`POST /api/fetch/data_service/{id}/coverage` 只抽取查询语句实际引用
+  的条件，返回覆盖的商品分组、空值记录数（按字段拆分）和待复核的含混模板。
+- **跨服务策略**：`POST /api/fetch/compare` 默认比较 `all`（空串一律不筛选，返回全组）
+  与 `defer`（暂缓含未确认空值含义的模板）。`confirm` 策略下必须先给出确认才能执行；
+  `local` 策略沿用各模板记录的局部含义并在结果里标注范围。含未确认模板的报表在
+  `POST /api/fetch/reports/{id}/deliver` 会被拦下。
+- **报表快照**：交付时冻结参数、模板定义版本与覆盖结果。之后模板定义更正只追加
+  重算记录（`recalculations`），交付结果仍可通过 `GET /api/fetch/reports/{id}` 回查，
+  用 `POST .../recalculate` 可按当时参数重算并与交付结果对照。
+
+回归与演示：
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+python3 -m pytest tests -q
+python3 scripts/verify_fetch_contract.py
+```
 
 ## 约定
 
